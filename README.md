@@ -1,7 +1,7 @@
 # Quack-a-Tag
 This is A Google Drive File Labelling Add-on developed by Team rojak. This add-on is designed to improve file management within Google Drive, providing users with enhanced search, tagging, and organizational capabilities.
 
-### Installation
+## Installation
 Since the add-on has not been deployed yet, you can install and test it in your own Google Apps Script environment by following these steps:
 
 1. **Copy the Code:**
@@ -21,8 +21,8 @@ Since the add-on has not been deployed yet, you can install and test it in your 
 5. **Run the Add-on:**
    - Open Google Drive, go to `Add-ons > Manage add-ons`, and then use your new add-on to test the features.
 
-### Features
+## Features
 1. 
 
-###  Links
+##  Links
 Google Apps Script:
