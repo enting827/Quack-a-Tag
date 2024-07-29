@@ -38,6 +38,7 @@ Since the add-on has not been deployed yet, you can install and test it in your 
    - Search for files using tags, allowing for quick and easy retrieval of files based on their assigned tags.
 
 ##  Other
-Library: Consist of our sensitive information such as firebase and gemini info required to connect
+Library: Consist of our sensitive information such as firebase and gemini info required to connect.
+
 [Google Apps Script](https://script.google.com/d/1gi9yomRaIXGCfqJRT6jaPQg-koHX9A_3gpM3kb7FeclcrFRXctlTGBd_/edit?usp=sharing)
 
