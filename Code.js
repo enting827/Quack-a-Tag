@@ -771,14 +771,8 @@ function manageSelectMultiple(selectedItems, isEditMode){
       .setTextButtonStyle(CardService.TextButtonStyle.FILLED) // Optional: Adds a filled background style
       .setBackgroundColor('#5B7F98')) // Background color for filled style
 
-  // Display auto tag if is in edit mode, else remove button
-  if (!isEditMode){
-    actionButtonSet.addButton(CardService.newTextButton()
-      .setText("Auto Tag ✨")
-      .setOnClickAction(CardService.newAction().setFunctionName('autoTagMultiple'))
-      .setTextButtonStyle(CardService.TextButtonStyle.FILLED) 
-      .setBackgroundColor(isEditMode ? '#F68888' :'#635A7A')); 
-  } else{
+  // Display remove button if is in edit mode
+  if (isEditMode){
     actionButtonSet.addButton(CardService.newTextButton()
           .setText('Remove ✖️')
           .setOnClickAction(CardService.newAction()
@@ -786,7 +780,7 @@ function manageSelectMultiple(selectedItems, isEditMode){
             .setParameters({selectedItems: JSON.stringify(selectedItems)}))
           .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
           .setBackgroundColor('#DD2222')); 
-  }     
+  }      
  
   // Do no display add tag section if is in edit mode
   if (!isEditMode){
