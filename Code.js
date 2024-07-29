@@ -780,7 +780,7 @@ function manageSelectMultiple(selectedItems, isEditMode){
             .setParameters({selectedItems: JSON.stringify(selectedItems)}))
           .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
           .setBackgroundColor('#DD2222')); 
-  }      
+  }       
  
   // Do no display add tag section if is in edit mode
   if (!isEditMode){
@@ -1313,6 +1313,14 @@ function onItemsSelected(e) {
   return onManagePage(selectedItems);
 }
 
+function showAddLabelCard() {}
+
+
+function showRemoveLabelCard() {}
+
+
+function showLabelContentCard() {}
+
 // Search for all files associated with the tag
 function confirmSearch(e) {
   if (!e.formInputs.file_search) {
@@ -1534,14 +1542,18 @@ function autoTagOne(e) {
     matchedTagsArray = String(matchedTags).split(",");
 
     if (generatedTagsArray.length > 0) {
-      for (var tag in generatedTagsArray) {
-        addNewTagFileByIdAndTags(generatedTagsArray[tag], item.id);
+      for (var tag of generatedTagsArray) {
+        if (tag && tag.trim() !== "") {
+          addNewTagFileByIdAndTags(tag, item.id);
+        }
       }
     }
-
+    
     if (matchedTagsArray.length > 0) {
-      for (var tag in matchedTagsArray) {
-        addNewTagFileByIdAndTags(matchedTagsArray[tag], item.id);
+      for (var tag of matchedTagsArray) {
+        if (tag && tag.trim() !== "") {
+          addNewTagFileByIdAndTags(tag, item.id);
+        }
       }
     }
 
@@ -1707,15 +1719,10 @@ function processThumbnailWithGemini(fileId) {
 
 // Gets the response from Gemini Vision and processes it
 function processGeminiResponse(geminiResponse) {
-  // Logger.log(geminiResponse)
   const responseData = JSON.parse(geminiResponse); 
 
-  // Logger.log(responseData)
   const generatedTags = responseData.generatedTags; 
   const matchedTags = responseData.matchedTags
-
-  // Logger.log(generatedTags)
-  // Logger.log(matchedTags)
 
   return [generatedTags,matchedTags]
 
