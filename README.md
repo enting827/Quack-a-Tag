@@ -35,7 +35,7 @@ Since the add-on has not been deployed yet, you can install and test it in your 
    - Automatically tag files using the Gemini API, enhancing file organization with minimal effort.
 
 5. **File Search**
-   - Search for files using tag, allowing for quick and easy retrieval of files based on their assigned tags.
+   - Search for files using tags, allowing for quick and easy retrieval of files based on their assigned tags.
 
 ##  Links
 [Google Apps Script](https://script.google.com/d/1gi9yomRaIXGCfqJRT6jaPQg-koHX9A_3gpM3kb7FeclcrFRXctlTGBd_/edit?usp=sharing)
