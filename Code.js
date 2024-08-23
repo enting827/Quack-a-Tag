@@ -54,6 +54,7 @@ function onHelpAction(e) {
  */
 function onInstall(e) {
   onHomepage(e);
+  createTimeDrivenTrigger();
 }
 
 
@@ -274,14 +275,21 @@ function removeTag (e){
 
 
   // Remove tags from the Tag database
-  tagsId.forEach(id =>{
-    removeTagFromTagDB(id);
-  });
+  var success = true
+  success = removeTagsFromTagDB(tagsId);
 
 
-// Remove tags for every files
-  removeTagsFromUserFiles(tagsId);
+  // Remove tags for every files
+  success = removeTagsFromUserFiles(tagsId);
 
+
+  if (!success){
+    return CardService.newActionResponseBuilder()
+    .setNotification(CardService.newNotification()
+      .setText(`${tagsName.join(', ')} removed unsuccessfully.`))
+    .setNavigation(CardService.newNavigation().updateCard(onLibraryPage())) 
+    .build();
+  }
 
   return CardService.newActionResponseBuilder()
     .setNotification(CardService.newNotification()
@@ -293,19 +301,25 @@ function removeTag (e){
 /**
  * Function to remove tag from the Tag database
  */
-function removeTagFromTagDB(tagId) {
-  const url = `${FIREBASE_URL}/tags/${tagId}.json?auth=${FIREBASE_SECRET}`;
+function removeTagsFromTagDB(tagIds) {
+  const updates = {};
+  tagIds.forEach(id => {
+    updates[`/tags/${id}`] = null; // Setting a path to `null` removes it in Firebase
+  });
+  
+  const url = `${FIREBASE_URL}/${hash(email)}.json?auth=${FIREBASE_SECRET}`;
   
   try {
     const options = {
-      method: 'DELETE'
+      method: 'PATCH', // Use PATCH to update multiple paths at once
+      contentType: 'application/json',
+      payload: JSON.stringify(updates)
     };
     UrlFetchApp.fetch(url, options);
-    return true; //indicate success
-
+    return true; // indicate success
   } catch (e) {
-    Logger.log('Error removing tag: ' + e.toString());
-    return false; //indicate failure
+    Logger.log('Error removing tags: ' + e.toString());
+    return false; // indicate failure
   }
 }
 
@@ -314,7 +328,7 @@ function removeTagFromTagDB(tagId) {
  * @param - list of tag id
  */
 function removeTagsFromUserFiles(tagsId) {
-  const url = `${FIREBASE_URL}/fileTags.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/fileTags.json?auth=${FIREBASE_SECRET}`;
   
   try {
     const response = UrlFetchApp.fetch(url, {
@@ -323,15 +337,15 @@ function removeTagsFromUserFiles(tagsId) {
     });
     
     const fileTagsData = JSON.parse(response.getContentText());
-    const userFileTags = Object.entries(fileTagsData).filter(([key, value]) => value.gmail === email);
+    const fileTags = Object.entries(fileTagsData);
 
-    userFileTags.forEach(([key, fileData]) => {
+    fileTags.forEach(([key, fileData]) => {
       const updatedTags = fileData.tags.filter(tagId => !tagsId.includes(tagId));
 
       
       // Check if updatedTags is empty, if so, delete the document
       if (updatedTags.length === 0) {
-        var deleteUrl = `${FIREBASE_URL}/fileTags/${key}.json?auth=${FIREBASE_SECRET}`;
+        var deleteUrl = `${FIREBASE_URL}/${hash(email)}/fileTags/${key}.json?auth=${FIREBASE_SECRET}`;
         var deleteOptions = {
           method: 'DELETE'
         };
@@ -341,11 +355,10 @@ function removeTagsFromUserFiles(tagsId) {
       // Update the database with the new list of tags
       else{
         var updatedData = {
-              gmail: email,
               tags: updatedTags
             };
 
-            var url = `${FIREBASE_URL}/fileTags/${key}.json?auth=${FIREBASE_SECRET}`;
+            var url = `${FIREBASE_URL}/${hash(email)}/fileTags/${key}.json?auth=${FIREBASE_SECRET}`;
             var options = {
               method: 'PUT',
               contentType: 'application/json',
@@ -356,9 +369,12 @@ function removeTagsFromUserFiles(tagsId) {
       }
 
     });
+
+    return true; // indicate success
     
   } catch (e) {
     Logger.log('Error removing tags from files: ' + e.toString());
+    return false; // indicate failure
   }
 }
 
@@ -449,7 +465,7 @@ function renameTags (e){
  * Rename the tags in the Tags collection
  */
 function updateTagInTagsCollection(oldId, newId, newName) {
-  const url = `${FIREBASE_URL}/tags/${oldId}.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/tags/${oldId}.json?auth=${FIREBASE_SECRET}`;
   
   // Fetch existing tag data
   const response = UrlFetchApp.fetch(url, { method: "GET" });
@@ -458,12 +474,11 @@ function updateTagInTagsCollection(oldId, newId, newName) {
   // Update tag data
   const updatedTagData = {
     ...tagData,
-    gmail: email,
     name: newName
   };
 
   // Save new tag data
-  const updateUrl = `${FIREBASE_URL}/tags/${newId}.json?auth=${FIREBASE_SECRET}`;
+  const updateUrl = `${FIREBASE_URL}/${hash(email)}/tags/${newId}.json?auth=${FIREBASE_SECRET}`;
   UrlFetchApp.fetch(updateUrl, {
     method: "PUT",
     contentType: "application/json",
@@ -480,7 +495,7 @@ function updateTagInTagsCollection(oldId, newId, newName) {
  */
 function updateTagInFileTagsCollection(oldId, newId) {
   // Fetch all file tags
-  const url = `${FIREBASE_URL}/fileTags.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/fileTags.json?auth=${FIREBASE_SECRET}`;
   const response = UrlFetchApp.fetch(url, { method: "GET" });
   const fileTags = JSON.parse(response.getContentText());
 
@@ -489,22 +504,20 @@ function updateTagInFileTagsCollection(oldId, newId) {
     if (fileTags.hasOwnProperty(fileId)) {
       const fileTagData = fileTags[fileId];
 
-      // Check if the file belongs to the specified email
-      if (fileTagData.gmail === email) {
-        // Update tag references
-        const updatedTags = fileTagData.tags.map(tagId => tagId === oldId ? newId : tagId);
+      // Update tag references
+      const updatedTags = fileTagData.tags.map(tagId => tagId === oldId ? newId : tagId);
 
-        // Save updated file tag data
-        const updateUrl = `${FIREBASE_URL}/fileTags/${fileId}.json?auth=${FIREBASE_SECRET}`;
-        UrlFetchApp.fetch(updateUrl, {
-          method: "PUT",
-          contentType: "application/json",
-          payload: JSON.stringify({
-            ...fileTagData,
-            tags: updatedTags
-          })
-        });
-      }
+      // Save updated file tag data
+      const updateUrl = `${FIREBASE_URL}/${hash(email)}/fileTags/${fileId}.json?auth=${FIREBASE_SECRET}`;
+      UrlFetchApp.fetch(updateUrl, {
+        method: "PUT",
+        contentType: "application/json",
+        payload: JSON.stringify({
+          ...fileTagData,
+          tags: updatedTags
+        })
+      });
+      
     }
   }
 }
@@ -531,7 +544,7 @@ function onSearchPage() {
   var fileSearchInput = CardService.newTextInput()
     .setFieldName('file_search')
     .setTitle("Insert tags to search for files 🏷️")
-    .setHint(' "E.g. T, Budget, Sales..." ');
+    .setHint(' "Use commas "," to seperate and search multiple tags" ');
   
   // Set suggestions only if there are tags in library
   var allTags = getAllTagsName();
@@ -908,22 +921,9 @@ function getSharedTags(selectedItems) {
 
 /**
  * Function to retrieve data from fileTags Firebase Realtime Database.
- * Return data that macthes gmail(user) and file id (for a file only)
- * For manage page, Can be use for 1 file / multiple files selected 
- *  "fileTags": {
-    "hash(gmail+fileid)": {
-      "gmail": "gmail",
-      "fileid": "hash(fileid)",
-      "tags": [
-        "id1",
-        "Iid2",
-        "id3"
-      ]
-    }
-  }
  */
 function getFileTagsDataById(fileId) {
-  const url = `${FIREBASE_URL}/fileTags/${hash(email+fileId)}.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/fileTags/${fileId}.json?auth=${FIREBASE_SECRET}`;
 
   const response = UrlFetchApp.fetch(url, {
     method: "GET",
@@ -941,7 +941,7 @@ function getFileTagsDataById(fileId) {
  * Function to retrieve data from tags Firebase Realtime Database with Tag ID
  */
 function getTagDetails(tagId) {
-  const url = `${FIREBASE_URL}/tags/${tagId}.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/tags/${tagId}.json?auth=${FIREBASE_SECRET}`;
 
   const response = UrlFetchApp.fetch(url, {
     method: "GET",
@@ -977,7 +977,7 @@ function getSortedTags(tagIds) {
  * Function to retrieve all tag data from Firebase Realtime Database for the current user.
  */
 function getAllTagsData(){
-  const url = `${FIREBASE_URL}/tags.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/tags.json?auth=${FIREBASE_SECRET}`;
 
   try {
     const response = UrlFetchApp.fetch(url, {
@@ -990,9 +990,7 @@ function getAllTagsData(){
     // Filter tags for the current user
     const userTags = [];
     for (const key in data) {
-      if (data[key].gmail === email) {
-        userTags.push({ id: key, name: data[key].name });
-      }
+      userTags.push({ id: key, name: data[key].name });
     }
 
     // Sort tags by name
@@ -1056,13 +1054,14 @@ function addNewTagFile(e) {
   var newTagObject = e.formInputs.addNewTagInput[0];
   var newTag = String(newTagObject).trim()
   var newTagId = hash(email+newTag.toLowerCase())
+var tagExist = false
 
   //Loop for every selected items/files
   try {
-    selectedItems.forEach (file =>{
+    for (var i = 0; i < selectedItems.length; i++) {
+      var file = selectedItems[i];
       var fileId = file.id;
-      var hashId = hash(email + fileId);
-      var url = `${FIREBASE_URL}/fileTags/${hashId}.json?auth=${FIREBASE_SECRET}`;
+      var url = `${FIREBASE_URL}/${hash(email)}/fileTags/${fileId}.json?auth=${FIREBASE_SECRET}`;
 
       // Check if the ID exists
       var response = UrlFetchApp.fetch(url, { method: 'GET' });
@@ -1080,16 +1079,15 @@ function addNewTagFile(e) {
         if (!data.tags.includes(newTagId)) {
           data.tags.push(newTagId);
         } else{
-          return CardService.newActionResponseBuilder()
-            .setNotification(CardService.newNotification()
-              .setText(`${newTag} already exists on this file.`))
-            .build();
+          if (selectedItems.length === 1){
+            tagExist = true;
+          }
+          break;
         }
         
       } else {
         // ID does not exist, create new data
         data = {
-          gmail: email,
           tags: [newTagId]
         };
       }
@@ -1103,12 +1101,16 @@ function addNewTagFile(e) {
 
       UrlFetchApp.fetch(url, options);
 
-      // Add new into database if it doesnt exist
-      addTagIfNotExists(newTag)
-
       // Add URL Link to the tag database
       addFileDetailsToTag(newTag, fileId);
-    })
+    }
+
+    if (tagExist){
+      return CardService.newActionResponseBuilder()
+            .setNotification(CardService.newNotification()
+              .setText(`${newTag} already exists on this file.`))
+            .build();
+    }
 
     // Refresh page by returning the updated card
     return CardService.newActionResponseBuilder()
@@ -1134,7 +1136,7 @@ function addNewTagFile(e) {
  */
 function addTagIfNotExists(tagName) {
   const hashedid= hash(email+tagName.toLowerCase()); // Hash the email+tag name
-  const url = `${FIREBASE_URL}/tags/${hashedid}.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/tags/${hashedid}.json?auth=${FIREBASE_SECRET}`;
   
   try {
     // Check if the tag exists
@@ -1144,7 +1146,6 @@ function addTagIfNotExists(tagName) {
     if (!data) {
       // Tag does not exist, add it
       var newTagData = {
-        gmail: email,
         name: tagName
       };
 
@@ -1218,7 +1219,6 @@ function removeFileTag(e) {
 
     selectedItems.forEach(file=>{
       var fileId = file.id;
-      var hashId = hash(email + fileId);
       // Fetch the current tags for the file
       var fileTagsData = getFileTagsDataById(fileId);
       
@@ -1234,7 +1234,7 @@ function removeFileTag(e) {
 
       // Check if updatedTags is empty, if so, delete the document
       if (updatedTags.length === 0) {
-        var deleteUrl = `${FIREBASE_URL}/fileTags/${hashId}.json?auth=${FIREBASE_SECRET}`;
+        var deleteUrl = `${FIREBASE_URL}/${hash(email)}/fileTags/${fileId}.json?auth=${FIREBASE_SECRET}`;
         var deleteOptions = {
           method: 'DELETE'
         };
@@ -1248,7 +1248,7 @@ function removeFileTag(e) {
               tags: updatedTags
             };
 
-            var url = `${FIREBASE_URL}/fileTags/${hashId}.json?auth=${FIREBASE_SECRET}`;
+            var url = `${FIREBASE_URL}/${hash(email)}/fileTags/${fileId}.json?auth=${FIREBASE_SECRET}`;
             var options = {
               method: 'PUT',
               contentType: 'application/json',
@@ -1355,7 +1355,7 @@ function confirmSearch(e) {
   if (commonFileIds.length === 0) {
     return CardService.newActionResponseBuilder()
       .setNotification(CardService.newNotification()
-        .setText('No files found with all the tags provided.'))
+        .setText('No files found with the tag(s) provided.'))
       .setNavigation(CardService.newNavigation().updateCard(onSearchPage()))
       .build();
   }
@@ -1425,9 +1425,9 @@ function confirmSearch(e) {
 }
 
 // Add file ids to a tag
-function addFileDetailsToTag(tagName, fileIds) {
+function addFileDetailsToTag(tagName, fileId) {
   const hashedid = hash(email + tagName.toLowerCase()); // Hash the email+tag name
-  const url = `${FIREBASE_URL}/tags/${hashedid}/.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/tags/${hashedid}/.json?auth=${FIREBASE_SECRET}`;
   
   try {
     // Check if the tag exists
@@ -1444,7 +1444,7 @@ function addFileDetailsToTag(tagName, fileIds) {
         data.fileIds = [];
       }
       // data.fileIds = data.fileIds.concat(fileIds);
-      data.fileIds.push(fileIds)
+      data.fileIds.push(fileId)
 
       var options = {
         method: 'PUT',
@@ -1454,7 +1454,19 @@ function addFileDetailsToTag(tagName, fileIds) {
 
       UrlFetchApp.fetch(url, options);
     } else {
-      Logger.log('Tag does not exist: ' + tagName);
+      // If tag doesn't exists, add new tag data
+      var newTagData = {
+        fileIds: [fileId],
+        name: tagName
+      };
+
+      var options = {
+        method: 'PUT', // Use PUT to create or replace the tag data
+        contentType: 'application/json',
+        payload: JSON.stringify(newTagData)
+      };
+
+      UrlFetchApp.fetch(url, options);
     }
   } catch (e) {
     Logger.log('Error adding file ids to tag: ' + e.toString());
@@ -1464,7 +1476,7 @@ function addFileDetailsToTag(tagName, fileIds) {
 // Get the file id associated with a tag
 function getFileIDsByTag(tagName) {
   const hashedid = hash(email + tagName.toLowerCase()); // Hash the email+tag name
-  const url = `${FIREBASE_URL}/tags/${hashedid}.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/tags/${hashedid}.json?auth=${FIREBASE_SECRET}`;
   
   try {
     // Check if the tag exists
@@ -1493,7 +1505,7 @@ function getFileIDsByTag(tagName) {
 function removeFileDetailsFromTag(tagId, fileId){
   // const hashedid = hash(email + tagId.toLowerCase()); // Hash the email+tag name
   const hashedid = tagId;
-  const url = `${FIREBASE_URL}/tags/${hashedid}/fileIds.json?auth=${FIREBASE_SECRET}`;
+  const url = `${FIREBASE_URL}/${hash(email)}/tags/${hashedid}/fileIds.json?auth=${FIREBASE_SECRET}`;
   // Logger.log(fileId)
   try {
     // Check if the tag exists
@@ -1583,8 +1595,7 @@ function addNewTagFileByIdAndTags(fileTag, fileId) {
   var newTagId = hash(email + newTag.toLowerCase());
 
   try {
-    var hashId = hash(email + fileId);
-    var url = `${FIREBASE_URL}/fileTags/${hashId}.json?auth=${FIREBASE_SECRET}`;
+    var url = `${FIREBASE_URL}/${hash(email)}/fileTags/${fileId}.json?auth=${FIREBASE_SECRET}`;
 
     // Check if the ID exists
     var response = UrlFetchApp.fetch(url, { method: 'GET' });
@@ -1611,7 +1622,6 @@ function addNewTagFileByIdAndTags(fileTag, fileId) {
     } else {
       // ID does not exist, create new data
       data = {
-        gmail: email,
         tags: [newTagId]
       };
     }
@@ -1625,9 +1635,6 @@ function addNewTagFileByIdAndTags(fileTag, fileId) {
 
     UrlFetchApp.fetch(url, options);
 
-    // Add new into database if it doesn't exist
-    addTagIfNotExists(newTag);
-
     // Add URL Link to the tag database
     addFileDetailsToTag(newTag, fileId);
 
@@ -1636,7 +1643,7 @@ function addNewTagFileByIdAndTags(fileTag, fileId) {
   }
 }
 
-function callGeminiProVision(prompt, image, temperature=0) {
+function callGeminiAPI(prompt, image, temperature=0) {
   const imageData = Utilities.base64Encode(image.getAs('image/png').getBytes());
 
   const payload = {
@@ -1672,16 +1679,16 @@ function callGeminiProVision(prompt, image, temperature=0) {
   return content;
 }
 
-function testGeminiVision2(thumbnailBlob) {
+function callGeminiVision(thumbnailBlob) {
   var existingTags = getAllTagsName(); 
-  var prompt = `You are an assistant that generates tags for images and text content so that the file with these contents will be easily findable by searching up the tags. When given an image or OCR output, you will first check a pre-existing list of tags and get the 5 most relevent tags which matches the context. If there are no matches found or if the pre-existing list of tags that matches the context does not add up to 5, you will auto-generate new tags to fill in the rest so the total tags from the list of pre-existing list and the generated tags list will add up to 5. These tags should behave like folder names, and should be created using the Tag What You See System, which is a principle where tags are based on the first few words that comes to mind when we would describe the file, and these words should be unique enough from each other so that it describes a large part of the file. On top of the Tag What You See System, the tags should also cover enough details to capture unique and useful features of the content so that those contents are easily searchable as part of the keywords, and you should prevent tags that are redundant, vague and general tags that doesnt help narrow down the search, or can be easily assumed from the other tags. For example, it is expected that an invoice would have content like total, money, and the company’s logo, so these descriptions as tags are redundant and can be easily covered with just the tag “Invoice”. Words like information or details to describe that the file contains content are too vague and general, and it is expected that a file would include some sort of information in the first place, so this naming behaviour should also be avoided. But the items that were bought in that invoice, along with the client’s name and client’s company would be unique across all types of invoices, and would be very useful and a common thing that users would want to search up for. The list of pre-existing tags is provided as ${existingTags}.
+  var prompt = `You are an assistant that generates tags for images and text content so that the file with these contents will be easily findable by searching up the tags. When given an image or OCR output, you will first check a pre-existing list of tags and get the 5 most relevant tags which matches the context. If there are no matches found or if the pre-existing list of tags that matches the context does not add up to 5, you will auto-generate new tags to fill in the rest so the total tags from the list of pre-existing list and the generated tags list will add up to 5. These tags should behave like folder names, and should be created using the Tag What You See System, which is a principle where tags are based on the first few words that comes to mind when we would describe the file, and these words should be unique enough from each other so that it describes a large part of the file. On top of the Tag What You See System, the tags should also cover enough details to capture unique and useful features of the content so that those contents are easily searchable as part of the keywords, and you should prevent tags that are redundant, vague and general tags that doesn't help narrow down the search, or can be easily assumed from the other tags. For example, it is expected that an invoice would have content like total, money, and the company’s logo, so these descriptions as tags are redundant and can be easily covered with just the tag “Invoice”. Words like information or details to describe that the file contains content are too vague and general, and it is expected that a file would include some sort of information in the first place, so this naming behaviour should also be avoided. But the items that were bought in that invoice, along with the client’s name and client’s company would be unique across all types of invoices, and would be very useful and a common thing that users would want to search up for. The list of pre-existing tags is provided as ${existingTags}.
 
   Your response must be a JSON object containing the following structure without any backticks.
 
   matchedTags: A list of tags from the pre-existing list that match the context (can be empty if no matches are found).
   generatedTags: A list of newly generated tags — created following the Tag What You See System, ensures that the tags are useful and unique, avoids general, vague and redundant terms — if no matches are found from the pre-existing list (omit if matches are found).`
 
-  const output = callGeminiProVision(prompt, thumbnailBlob);
+  const output = callGeminiAPI(prompt, thumbnailBlob);
 
   return output;
 }
@@ -1691,7 +1698,7 @@ function processThumbnailWithGemini(fileId) {
   try {
     const thumbnailBlob = DriveApp.getFileById(fileId).getThumbnail();
 
-    const response = testGeminiVision2(thumbnailBlob);
+    const response = callGeminiVision(thumbnailBlob);
 
     const [generatedTags, matchedTags] = processGeminiResponse(response);
     return { success: true, generatedTags, matchedTags };
@@ -1704,7 +1711,7 @@ function processThumbnailWithGemini(fileId) {
       Logger.log('TypeError: Unable to retrieve the thumbnail:', error);
       errorMessage = 'This file is not compatible for auto search, please choose a file with a thumbnail displayed';
     } else if (error.message.includes('429')) {
-      // Handle rate limit 429 error for testGeminiVision2
+      // Handle rate limit 429 error for callGeminiVision
       Logger.log('Rate limit exceeded: ', error);
       errorMessage = 'Too many requests. Please try again later.';
     } else {
