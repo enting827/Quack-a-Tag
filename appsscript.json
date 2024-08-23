@@ -22,7 +22,7 @@
   "addOns": {
     "common": {
       "name": "🦆 Quack-a-Tag! 🏷️",
-      "logoUrl": "https://raw.githubusercontent.com/enting827/GoogleHackathon/main/logo%20coloured.png?token=GHSAT0AAAAAACVL7D7P7MO3VHVJ7YRPZPFSZVHTYIQ",
+      "logoUrl": "https://i.imgur.com/Qgzah2V.png",
       "useLocaleFromApp": true,
       "homepageTrigger": {
         "runFunction": "onHomepage"
